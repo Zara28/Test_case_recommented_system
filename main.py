@@ -1,14 +1,13 @@
 import logging
-
+from typing import Optional
 from fastapi import FastAPI, HTTPException, status
-
 from contextlib import asynccontextmanager
 
 from classes import MatchResponse, MatchRequest
 from config import settings
 from ProcessService import Process
 
-process_service: Process = None
+process_service: Optional[Process] = None
 
 
 @asynccontextmanager

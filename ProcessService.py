@@ -2,7 +2,7 @@ import re
 
 import pandas as pd
 
-from VectorizerSevice import Vectorizer
+from VectorizerService import Vectorizer
 from config import Settings
 
 
@@ -41,12 +41,7 @@ class Process:
         """
         Инициализирует набор векторов для поиска по каталогу
         """
-
-        df_catalog = pd.DataFrame(data)
-        df_catalog['search_text'] = df_catalog['name'] + " " + df_catalog['unit']
-        df_catalog['search_text'] = df_catalog['search_text'].apply(self.normalize_text)
-
-        vector = Vectorizer(df_catalog['search_text'], settings.t_high, settings.t_low)
+        vector = Vectorizer(data['search_text'], settings.t_high, settings.t_low)
 
         return vector
 
@@ -66,8 +61,10 @@ class Process:
                     "confidence": idx['confidence']
                 })
 
+            message = "Ничего не нашлось" if indexes["status"] == "not_found" else f"Найдено совпадений: {len(candidates)}"
+
             results.append({
-                "message": messages[i],
+                "message": message,
                 "status": indexes["status"],
                 "candidates": candidates
             })
