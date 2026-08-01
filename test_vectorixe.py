@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import re
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -43,34 +44,70 @@ def train_vectorizer(corpus: pd.Series):
     return vectorizer, tfidf_matrix
 
 
-def match_product(query: str, df: pd.DataFrame, vectorizer: TfidfVectorizer, tfidf_matrix, top_k: int = 3):
-    """
-    Векторизует запрос и возвращает топ-K кандидатов с их уверенностью (confidence).
-    """
-    norm_query = normalize_text(query)
-
-    # Если после нормализации запрос пустой
-    if not norm_query:
-        return []
-
-    query_vec = vectorizer.transform([norm_query])
-
-    # Считаем косинусное расстояние между запросом и всеми векторами каталога
-    similarities = cosine_similarity(query_vec, tfidf_matrix).flatten()
-
-    # Получаем индексы топ-K результатов (сортировка по возрастанию, поэтому берем с конца)
-    top_indices = similarities.argsort()[-top_k:][::-1]
-
+def match_messages(messages: list, df: pd.DataFrame, vectorizer: TfidfVectorizer, tfidf_matrix):
     results = []
-    for idx in top_indices:
-        score = similarities[idx]
-        if score > 0.05:  # Отсекаем совсем нулевые/случайные совпадения
-            results.append({
-                "sku": df.iloc[idx]['sku'],
-                "name": df.iloc[idx]['name'],
-                "confidence": round(float(score), 3)
-            })
-    return results
+
+    for msg in messages:
+        norm_query = normalize_text(msg)
+        if not norm_query:
+            results.append({"message": msg, "status": "not_found", "candidates": []})
+            continue
+
+        query_vec = vectorizer.transform([norm_query])
+        similarities = cosine_similarity(query_vec, tfidf_matrix).flatten()
+        top_indices = similarities.argsort()[-3:][::-1]
+
+        candidates = []
+        for idx in top_indices:
+            score = round(float(similarities[idx]), 3)
+            if score >= T_LOW:
+                candidates.append({
+                    "sku": df.iloc[idx]['sku'],
+                    "name": df.iloc[idx]['name'],
+                    "price": df.iloc[idx]['price'],
+                    "confidence": score
+                })
+
+        # --- БЛОК ЛОГИКИ СТАТУСОВ ---
+        if not candidates:
+            status = "not_found"
+        elif candidates[0]['confidence'] >= T_HIGH:
+            status = "matched"
+            candidates = [candidates[0]]  # Оставляем только топ-1 кандидат
+        else:
+            status = "ambiguous"
+
+        results.append({
+            "message": msg,
+            "status": status,
+            "candidates": candidates
+        })
+
+    return {"results": results}
+
+
+def print_human_readable(results_dict):
+    """Выводит результаты так, как бы ответил AI-агент в чате."""
+    print("\n" + "=" * 50)
+    print("ЭМУЛЯЦИЯ ОТВЕТОВ AI-АГЕНТА")
+    print("=" * 50)
+
+    for item in results_dict["results"]:
+        print(f"\nПокупатель: «{item['message']}»")
+        print(f"Статус системы: [{item['status'].upper()}]")
+
+        if item['status'] == "not_found":
+            print("Агент: Простите, я не понял запрос или такого товара нет в нашем каталоге.")
+
+        elif item['status'] == "matched":
+            c = item['candidates'][0]
+            print(
+                f"Агент: Отличный выбор! Добавляю в корзину: {c['name']} (SKU: {c['sku']}, Уверенность: {c['confidence']})")
+
+        elif item['status'] == "ambiguous":
+            print("Агент: Я нашел несколько похожих вариантов. Уточните, какой именно вам нужен:")
+            for i, c in enumerate(item['candidates'], 1):
+                print(f"  {i}. {c['name']} (SKU: {c['sku']}, Уверенность: {c['confidence']})")
 
 data = load_and_prepare_catalog("catalog_excel.csv")
 df_catalog = pd.DataFrame(data)
@@ -79,8 +116,20 @@ df_catalog['search_text'] = df_catalog['search_text'].apply(normalize_text)
 
 vector, matrix = train_vectorizer(df_catalog['search_text'])
 
+T_HIGH = 0.85  # Порог уверенного ответа
+T_LOW = 0.30
+
 with open("messages.txt") as file:
     lines = [line.rstrip() for line in file]
-    for line in lines:
-        result = match_product(line, df_catalog, vector, matrix)
-        print(f"Для запроса {line} найдены результаты: {result}")
+    final_output = match_messages(lines, df_catalog, vector, matrix)
+    json_output = {"results": []}
+    for r in final_output["results"]:
+        clean_candidates = [{"sku": c["sku"], "confidence": c["confidence"]} for c in r["candidates"]]
+        json_output["results"].append({
+            "message": r["message"],
+            "status": r["status"],
+            "candidates": clean_candidates
+        })
+
+    # 5. Выводим красивый лог
+    print_human_readable(final_output)
