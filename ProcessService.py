@@ -3,13 +3,14 @@ import re
 import pandas as pd
 
 from VectorizerSevice import Vectorizer
+from config import Settings
 
 
 class Process:
 
-    def __init__(self):
-        self.data = self.load_and_prepare_catalog("catalog_excel.csv")
-        self.vectorizer = self.init_vectorizer(self.data)
+    def __init__(self, settings: Settings):
+        self.data = self.load_and_prepare_catalog(settings.csv_path)
+        self.vectorizer = self.init_vectorizer(self.data, settings)
 
     def normalize_text(self, text: str) -> str:
         """
@@ -29,24 +30,30 @@ class Process:
         """
         Загружает каталог и подготавливает поле для поиска.
         """
-        # Склеиваем название и единицы измерения.
-        # Часто покупатель ищет именно по связке (например, "саморезы 75 пачка")
-        self.data['search_text'] = self.data['name'].fillna('') + " " + self.data['unit'].fillna('')
-        self.data['search_text'] = self.data['search_text'].apply(self.normalize_text)
+        data = pd.read_csv(csv_path)
 
-        return self.data
+        data['search_text'] = data['name'].fillna('') + " " + data['unit'].fillna('')
+        data['search_text'] = data['search_text'].apply(self.normalize_text)
 
-    def init_vectorizer(self, data):
+        return data
+
+    def init_vectorizer(self, data, settings):
+        """
+        Инициализирует набор векторов для поиска по каталогу
+        """
 
         df_catalog = pd.DataFrame(data)
         df_catalog['search_text'] = df_catalog['name'] + " " + df_catalog['unit']
         df_catalog['search_text'] = df_catalog['search_text'].apply(self.normalize_text)
 
-        vector = Vectorizer(df_catalog['search_text'])
+        vector = Vectorizer(df_catalog['search_text'], settings.t_high, settings.t_low)
 
         return vector
 
     def get_answer(self, messages):
+        """
+        Метод поиска ответов на заданные вопросы
+        """
         results = []
         messages_normal = [self.normalize_text(msg) for msg in messages]
 

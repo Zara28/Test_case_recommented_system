@@ -4,14 +4,17 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 
 class Vectorizer:
-    def __init__(self, corpus: pd.Series):
+    def __init__(self, corpus: pd.Series, t_high: float, t_low: float):
         self.vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
         self.tfidf_matrix = self.vectorizer.fit_transform(corpus)
 
-        self.T_HIGH = 0.85
-        self.T_LOW = 0.30
+        self.T_HIGH = t_high
+        self.T_LOW = t_low
 
     def match_status(self, candidates):
+        """
+        Матчинг статусов
+        """
         if not candidates:
             status = "not_found"
         elif candidates[0]['confidence'] >= self.T_HIGH:
@@ -23,6 +26,9 @@ class Vectorizer:
         return status, candidates
 
     def search_candidates(self, messages: list):
+        """
+        Реализация векторного поиска
+        """
         results = []
 
         for msg in messages:
