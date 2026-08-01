@@ -6,6 +6,12 @@
 ```
 pip install -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000
 ```
+
+Для запуска в Windows PowerShell используйте 
+```
+pip install -r requirements.txt ; uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
 Перед запуском убедитесь, что файл с каталогом находится в корневой директории. Если название каталога отлично от ```catalog_exel.csv```, необходимо прописать его название в ```.env```
   
 
